@@ -1,37 +1,37 @@
-pipeline{
+pipeline {
     agent any
-    tools{
+    tools {
         jdk 'jdk21'
-        nodejs 'node18'
+        nodejs 'node24'
     }
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME = tool 'sonar-scanner'
     }
     stages {
-        stage('clean workspace'){
-            steps{
+        stage('clean workspace') {
+            steps {
                 cleanWs()
             }
         }
-        stage('Checkout from Git'){
-            steps{
+        stage('Checkout from Git') {
+            steps {
                 git 'https://github.com/KastroVKiran/DevOps-Project-Swiggy.git'
             }
         }
-        stage("Sonarqube Analysis "){
-            steps{
+        stage("Sonarqube Analysis ") {
+            steps {
                 withSonarQubeEnv('sonar-server') {
                     sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Swiggy \
                     -Dsonar.projectKey=Swiggy '''
                 }
             }
         }
-        stage("quality gate"){
-           steps {
+        stage("quality gate") {
+            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
-            } 
+            }
         }
         stage('Install Dependencies') {
             steps {
@@ -44,29 +44,19 @@ pipeline{
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
             }
         }
-        stage('TRIVY FS SCAN') {
+        stage("Docker Build & Push") {
             steps {
-                sh "trivy fs . > trivyfs.txt"
-            }
-        }
-        stage("Docker Build & Push"){
-            steps{
-                script{
-                   withDockerRegistry(credentialsId: 'docker-creds', toolName: 'docker'){   
-                       sh "docker build -t swiggy ."
-                       sh "docker tag swiggy swaroop3877/swiggy:latest "
-                       sh "docker push swaroop3877/swiggy:latest "
+                script {
+                    withDockerRegistry(credentialsId: 'docker-creds', toolName: 'docker') {
+                        sh "docker build -t swiggy ."
+                        sh "docker tag swiggy swaroop3877/swiggy:latest "
+                        sh "docker push swaroop3877/swiggy:latest "
                     }
                 }
             }
         }
-        stage("TRIVY"){
-            steps{
-                sh "trivy image swaroop3877/swiggy:latest > trivy.txt" 
-            }
-        }
-        stage('Deploy to container'){
-            steps{
+        stage('Deploy to container') {
+            steps {
                 sh 'docker run -d --name swiggy -p 3000:3000 swaroop3877/swiggy:latest'
             }
         }
