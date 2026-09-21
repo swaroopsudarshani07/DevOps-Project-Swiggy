@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+    tools {
+        jdk 'jdk21'
+        nodejs 'node24'
+    }
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+    stages {
+        stage('clean workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+        stage('Checkout from Git') {
+            steps {
+                git 'https://github.com/swaroopsudarshani07/DevOps-Project-Swiggy.git'
+            }
+        }
+        stage("Sonarqube Analysis ") {
+            steps {
+                withSonarQubeEnv('sonar-server') {
+                    sh '''
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=Swiggy \
+                        -Dsonar.projectKey=Swiggy
+                    '''
+                }
+            }
+        }
+        stage("quality gate") {
+            steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                }
+            }
+        }
+        stage('Install Dependencies') {
+            steps {
+                sh "npm install"
+            }
+        }
+        stage("Docker Build & Push") {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'docker-creds',
+                                                     usernameVariable: 'DOCKER_USERNAME',
+                                                     passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh """
+                            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                            docker build -t swaroop3877/swiggy:latest .
+                            docker push swaroop3877/swiggy:latest
+                        """
+                    }
+                }
+            }
+        }
+        stage('Deploy to container') {
+            steps {
+                sh 'docker run -d --name swiggy -p 3000:3000 swaroop3877/swiggy:latest'
+            }
+        }
+    }
+}
